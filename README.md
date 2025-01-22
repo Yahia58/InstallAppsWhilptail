@@ -32,7 +32,7 @@ This Bash script simplifies the process of identifying and installing software p
 ### Usage  
 1. Clone the repository:  
    ```bash  
-   git clone  https://github.com/Yahia58/InstallAppsWhilptail
+   git clone  https://github.com/Yahia58/InstallAppsWhilptail.git
    cd InstallAppsWhilptail 
    ```  
 
