@@ -32,18 +32,18 @@ This Bash script simplifies the process of identifying and installing software p
 ### Usage  
 1. Clone the repository:  
    ```bash  
-   git clone <repository-url>  
-   cd <repository-directory>  
+   git clone  https://github.com/Yahia58/InstallAppsWhilptail
+   cd InstallAppsWhilptail 
    ```  
 
 2. Make the script executable:  
    ```bash  
-   chmod +x script-name.sh  
+   chmod +x InstallAppsWhilptail 
    ```  
 
 3. Run the script:  
    ```bash  
-   sudo ./script-name.sh  
+   sudo ./InstallAppsWhilptail  
    ```  
 
 4. Follow the interactive prompts to specify the application and installation target (local or remote).  
