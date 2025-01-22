@@ -1,0 +1,138 @@
+#!/bin/bash
+
+# Check if the script is run as root
+if [[ $EUID -ne 0 ]]; then
+    whiptail --msgbox "Please run the script as root or use sudo." 10 40
+    exit 1
+fi
+
+# Function to determine the operating system
+get_os_type() {
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        echo "$ID"
+    else
+        echo "unknown"
+    fi
+}
+
+# Function to find the closest package based on the OS
+find_closest_package() {
+    local app_name=$1
+    local os_type=$2
+
+    declare -A centos_packages=( 
+        ["apache"]="httpd"
+        ["mysql"]="mariadb-server"
+        ["php"]="php"
+        ["nginx"]="nginx"
+        ["postgresql"]="postgresql-server"
+        ["docker"]="docker-ce"
+        ["redis"]="redis"
+        ["mongodb"]="mongodb-org"
+        ["git"]="git"
+        ["python"]="python3"
+        ["java"]="java-1.8.0-openjdk"
+        ["nodejs"]="nodejs"
+        ["vscode"]="code"
+    )
+
+    declare -A ubuntu_packages=( 
+        ["apache"]="apache2"
+        ["mysql"]="mysql-server"
+        ["php"]="php"
+        ["nginx"]="nginx"
+        ["postgresql"]="postgresql"
+        ["docker"]="docker"
+        ["redis"]="redis-server"
+        ["mongodb"]="mongodb"
+        ["git"]="git"
+        ["python"]="python3"
+        ["java"]="openjdk-8-jdk"
+        ["nodejs"]="nodejs"
+        ["vscode"]="code"
+    )
+
+    if [[ "$os_type" == "centos" || "$os_type" == "rhel" || "$os_type" == "fedora" ]]; then
+        echo "${centos_packages[$app_name]:-No package found}"
+    elif [[ "$os_type" == "ubuntu" || "$os_type" == "debian" ]]; then
+        echo "${ubuntu_packages[$app_name]:-No package found}"
+    else
+        echo "Unsupported OS"
+    fi
+}
+
+# Select application name
+app_name=$(whiptail --inputbox "Enter the name of the application you want to install (e.g., apache, mysql, php, nginx, etc.):" 10 60 3>&1 1>&2 2>&3)
+
+# Handle user cancellation
+if [[ $? -ne 0 ]]; then
+    whiptail --msgbox "Operation cancelled." 10 40
+    exit 1
+fi
+
+# Prompt the user whether to install on this device or another
+if whiptail --yesno "Do you want to install the application on this device?" 10 60; then
+    install_here="yes"
+    os_type=$(get_os_type) # Automatically determine OS type
+    whiptail --msgbox "Detected OS: $os_type" 10 40
+else
+    if whiptail --yesno "Do you want to install the application on a remote device?" 10 60; then
+        remote_ip=$(whiptail --inputbox "Enter the remote device's IP address:" 10 60 3>&1 1>&2 2>&3)
+        remote_user=$(whiptail --inputbox "Enter the SSH username for the remote device:" 10 60 3>&1 1>&2 2>&3)
+
+        # Check SSH connectivity
+        ssh -o BatchMode=yes -o ConnectTimeout=5 "$remote_user@$remote_ip" "exit" > /dev/null 2>&1
+        if [[ $? -ne 0 ]]; then
+          whiptail --msgbox "Failed to connect to the remote device. Possible causes: incorrect IP/username, or SSH is not configured properly. Try manual SSH to diagnose further." 10 60
+        exit 1
+        fi
+
+        # Automatically determine OS for remote device
+        os_type=$(ssh "$remote_user@$remote_ip" "$(declare -f get_os_type); get_os_type")
+
+        install_here="no"
+    else
+        whiptail --msgbox "No remote device specified. Exiting." 10 40
+        exit 1
+    fi
+fi
+
+# Convert inputs to lowercase
+app_name=$(echo "$app_name" | tr '[:upper:]' '[:lower:]')
+os_type=$(echo "$os_type" | tr '[:upper:]' '[:lower:]')
+
+# Find the closest package
+package_name=$(find_closest_package "$app_name" "$os_type")
+
+if [[ "$package_name" == "No package found" || "$package_name" == "Unsupported OS" ]]; then
+    whiptail --msgbox "No suitable package found for the application '$app_name' on the operating system '$os_type'." 10 60
+    exit 1
+fi
+
+# Installation
+if whiptail --yesno "Install the package '$package_name' on the selected device?" 10 60; then
+    if [[ "$install_here" == "yes" ]]; then
+        if [[ "$os_type" == "centos" || "$os_type" == "rhel" || "$os_type" == "fedora" ]]; then
+            yum install -y "$package_name" && whiptail --msgbox "The package '$package_name' has been installed successfully." 10 60
+        elif [[ "$os_type" == "ubuntu" || "$os_type" == "debian" ]]; then
+            apt update -y > /dev/null 2>&1 && apt install -y "$package_name" && whiptail --msgbox "The package '$package_name' has been installed successfully." 10 60
+        else
+            whiptail --msgbox "Unsupported OS for installation." 10 40
+            exit 1
+        fi
+    else
+        if [[ "$os_type" == "centos" || "$os_type" == "rhel" || "$os_type" == "fedora" ]]; then
+            ssh "$remote_user@$remote_ip" "sudo yum install -y $package_name" && whiptail --msgbox "The package '$package_name' has been installed successfully on $remote_ip." 10 60
+        elif [[ "$os_type" == "ubuntu" || "$os_type" == "debian" ]]; then
+            ssh "$remote_user@$remote_ip" "sudo apt update -y > /dev/null 2>&1 && sudo apt install -y $package_name" && whiptail --msgbox "The package '$package_name' has been installed successfully on $remote_ip." 10 60
+        else
+            whiptail --msgbox "Unsupported OS for remote installation." 10 40
+            exit 1
+        fi
+    fi
+else
+    whiptail --msgbox "Installation cancelled." 10 40
+fi
+
+exit 0
